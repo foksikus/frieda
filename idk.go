@@ -14,56 +14,49 @@ type Path struct {
 }
 
 // PathsCache is a map to store precomputed paths from each walkable cell to each other walkable cell.
-type PathsCache map[string]map[string][]Vector
+type PathsCache map[string]map[string][]*Vector
 
-func reverseArray(a []*Node) {
+func reverseArray(a []*Vector) {
 	for i, j := 0, len(a)-1; i < j; i, j = i+1, j-1 {
 		a[i], a[j] = a[j], a[i]
 	}
-}
-
-func getReversePath(path []*Node) []*Node {
-	reversed := make([]*Node, len(path))
-	copy(reversed, path)
-	reverseArray(reversed)
-	return reversed
 }
 
 func getKey(x, y int) string {
 	return fmt.Sprintf("(%d,%d)", x, y)
 }
 
-func pathToVectors(path []*Node) []Vector {
-	vectors := make([]Vector, len(path))
+func pathToVectors(path []*Node) []*Vector {
+	vectors := make([]*Vector, len(path))
 	for i, node := range path {
-		vectors[i] = Vector{X: node.X, Y: node.Y}
+		vectors[i] = vectorPool.Get(node.X, node.Y)
 	}
 	return vectors
 }
 
-func traversePathForward(path []*Node, endX, endY int, paths PathsCache) {
+func traversePathForward(path []*Vector, endX, endY int, paths PathsCache) {
 	endKey := getKey(endX, endY)
 
 	for i := 0; i < len(path); i++ {
 		startKey := getKey(path[i].X, path[i].Y)
 		if _, ok := paths[startKey]; !ok {
-			paths[startKey] = make(map[string][]Vector)
+			paths[startKey] = make(map[string][]*Vector)
 		}
 		if _, ok := paths[startKey][endKey]; !ok {
-			paths[startKey][endKey] = pathToVectors(path[i:])
+			paths[startKey][endKey] = path[i:]
 		}
 	}
 }
 
-func traversePathBackward(path []*Node, startX, startY int, paths PathsCache) {
+func traversePathBackward(path []*Vector, startX, startY int, paths PathsCache) {
 	startKey := getKey(startX, startY)
 	if _, ok := paths[startKey]; !ok {
-		paths[startKey] = make(map[string][]Vector)
+		paths[startKey] = make(map[string][]*Vector)
 	}
 	for i := len(path) - 1; i >= 0; i-- {
 		endKey := getKey(path[i].X, path[i].Y)
 		if _, ok := paths[startKey][endKey]; !ok {
-			paths[startKey][endKey] = pathToVectors(path[:i+1])
+			paths[startKey][endKey] = path[:i+1]
 		}
 	}
 }
@@ -74,25 +67,30 @@ func solvePath(grid *Grid, startX, startY, endX, endY int, paths PathsCache) {
 
 	// Check if the start key has already been initialized.
 	if _, ok := paths[startKey]; !ok {
-		paths[startKey] = make(map[string][]Vector)
+		paths[startKey] = make(map[string][]*Vector)
 	}
 
 	// Check if the path has already been calculated and stored.
 	if _, ok := paths[startKey][goalKey]; !ok {
 		// Calculate and store the forward path.
 		path := AStar(grid, startX, startY, endX, endY)
+		vecPath := pathToVectors(path)
 
-		paths[startKey][goalKey] = pathToVectors(path)
-		traversePathForward(path, endX, endY, paths)
-		traversePathBackward(path, startX, startY, paths)
-		reverseArray(path)
-		traversePathForward(path, startX, startY, paths)
-		traversePathBackward(path, endX, endY, paths)
+		paths[startKey][goalKey] = vecPath
+		traversePathForward(vecPath, endX, endY, paths)
+		traversePathBackward(vecPath, startX, startY, paths)
+		reverseArray(vecPath)
+		traversePathForward(vecPath, startX, startY, paths)
+		traversePathBackward(vecPath, endX, endY, paths)
 	}
 }
 
+// vector pool
+var vectorPool *VectorPool
+
 // PrecomputePaths calculates and stores all paths in the PathsCache.
 func PrecomputePaths(grid *Grid) PathsCache {
+	vectorPool = NewVectorPool(grid.Width, grid.Height)
 	paths := make(PathsCache)
 
 	for y1 := 0; y1 < int(grid.Height); y1++ {
