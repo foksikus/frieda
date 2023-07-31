@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+
+	"github.com/beefsack/go-astar"
 )
 
 // Tile represents a single tile with various properties.
@@ -12,13 +14,47 @@ type Tile struct {
 	Snipe    bool
 	Water    bool
 	Cliff    bool
+	x, y     int
+	w        *Grid
 }
 
 // Grid represents the game map as a 2D grid of tiles.
 type Grid struct {
 	Width  int
 	Height int
-	Data   [][]Tile
+	Data   []Tile
+}
+
+// returns a tile for x,y
+func (g *Grid) Tile(x, y int) *Tile {
+	if x < 0 || y < 0 || x >= int(g.Width) || y >= int(g.Height) {
+		return &g.Data[y*g.Width+x]
+	}
+	return nil
+}
+
+func (t *Tile) PathNeighbors() []astar.Pather {
+	homies := []astar.Pather{}
+	for _, offset := range [][]int{
+		{-1, 0},
+		{1, 0},
+		{0, -1},
+		{0, 1},
+	} {
+		if n := t.w.Tile(t.x+offset[0], t.y+offset[1]); n != nil && n.Walkable {
+			homies = append(homies, n)
+		}
+	}
+	return homies
+}
+
+func (t *Tile) PathNeighborCost(to astar.Pather) float64 {
+	return 1
+}
+
+func (t *Tile) PathEstimatedCost(to astar.Pather) float64 {
+	toTile := to.(*Tile)
+	return float64((toTile.x-t.x)*(toTile.x-t.x) + (toTile.y-t.y)*(toTile.y-t.y))
 }
 
 // NewGrid creates a new grid with the given dimensions.
@@ -26,28 +62,29 @@ func NewGrid(width, height int) *Grid {
 	grid := &Grid{
 		Width:  width,
 		Height: height,
-		Data:   make([][]Tile, height),
-	}
-	for i := range grid.Data {
-		grid.Data[i] = make([]Tile, width)
+		Data:   make([]Tile, width*height),
 	}
 	return grid
 }
 
 // SetTileProperties sets the properties of a tile at the given coordinates.
-func (grid *Grid) SetTileProperties(x, y int, walkable, snipe, water, cliff bool) {
-	if x >= 0 && y >= 0 && x < int(grid.Width) && y < int(grid.Height) {
-		grid.Data[y][x].Walkable = walkable
-		grid.Data[y][x].Snipe = snipe
-		grid.Data[y][x].Water = water
-		grid.Data[y][x].Cliff = cliff
+func (grid *Grid) SetTileProperties(index int, walkable, snipe, water, cliff bool) {
+	if index >= 0 && index < len(grid.Data) {
+		grid.Data[index].Walkable = walkable
+		grid.Data[index].Snipe = snipe
+		grid.Data[index].Water = water
+		grid.Data[index].Cliff = cliff
+		grid.Data[index].x = index % grid.Width
+		grid.Data[index].y = index / grid.Width
+		grid.Data[index].w = grid
 	}
 }
 
 // GetTileProperties returns the properties of a tile at the given coordinates.
 func (grid *Grid) GetTileProperties(x, y int) (walkable, snipe, water, cliff bool) {
 	if x >= 0 && y >= 0 && x < int(grid.Width) && y < int(grid.Height) {
-		tile := grid.Data[y][x]
+		tile := grid.Data[y*grid.Width+x]
+		// tile := grid.Data[y][x]
 		return tile.Walkable, tile.Snipe, tile.Water, tile.Cliff
 	}
 	return false, false, false, false
@@ -79,15 +116,13 @@ func ParseGridFromFile(filePath string) (*Grid, error) {
 	grid := NewGrid(width, height)
 	parsedData := data[4:]
 
-	for y := 0; y < int(height); y++ {
-		for x := 0; x < int(width); x++ {
-			tileByte := parsedData[y*int(width)+x]
-			walkable := tileByte&TILE_WALK > 0
-			snipe := tileByte&TILE_SNIPE > 0
-			water := tileByte&TILE_WATER > 0
-			cliff := tileByte&TILE_CLIFF > 0
-			grid.SetTileProperties(x, y, walkable, snipe, water, cliff)
-		}
+	for i := 0; i < len(parsedData); i++ {
+		tileByte := parsedData[i]
+		walkable := tileByte&TILE_WALK > 0
+		snipe := tileByte&TILE_SNIPE > 0
+		water := tileByte&TILE_WATER > 0
+		cliff := tileByte&TILE_CLIFF > 0
+		grid.SetTileProperties(i, walkable, snipe, water, cliff)
 	}
 
 	return grid, nil

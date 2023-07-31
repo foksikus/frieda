@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/beefsack/go-astar"
 )
 
 // Path represents a single path from one walkable cell to another.
-type Path struct {
-	StartX, StartY int
-	GoalX, GoalY   int
-	Nodes          []*Node
-}
+// type Path struct {
+// 	StartX, StartY int
+// 	GoalX, GoalY   int
+// 	Nodes          []*Node
+// }
 
 // PathsCache is a map to store precomputed paths from each walkable cell to each other walkable cell.
 type PathsCache map[string]map[string][]*Vector
@@ -26,10 +28,10 @@ func getKey(x, y int) string {
 	return fmt.Sprintf("(%d,%d)", x, y)
 }
 
-func pathToVectors(path []*Node) []*Vector {
+func pathToVectors(path []*Tile) []*Vector {
 	vectors := make([]*Vector, len(path))
 	for i, node := range path {
-		vectors[i] = vectorPool.Get(node.X, node.Y)
+		vectors[i] = vectorPool.Get(node.x, node.y)
 	}
 	return vectors
 }
@@ -72,9 +74,14 @@ func solvePath(grid *Grid, startX, startY, endX, endY int, paths PathsCache) {
 
 	// Check if the path has already been calculated and stored.
 	if _, ok := paths[startKey][goalKey]; !ok {
-		// Calculate and store the forward path.
-		path := AStar(grid, startX, startY, endX, endY)
-		vecPath := pathToVectors(path)
+		path, distance, found := astar.Path(grid.Tile(startX, startY), grid.Tile(endX, endY))
+		if !found {
+			fmt.Fprintf(os.Stderr, "No path found from (%d,%d) to (%d,%d) with distance %d\n", startX, startY, endX, endY, distance)
+			return
+		}
+
+		// path := AStar(grid, startX, startY, endX, endY)
+		vecPath := pathToVectors(([]Tile)(path))
 
 		paths[startKey][goalKey] = vecPath
 		traversePathForward(vecPath, endX, endY, paths)
@@ -95,13 +102,13 @@ func PrecomputePaths(grid *Grid) PathsCache {
 
 	for y1 := 0; y1 < int(grid.Height); y1++ {
 		for x1 := 0; x1 < int(grid.Width); x1++ {
-			if !grid.Data[y1][x1].Walkable {
+			if !grid.Tile(x1, y1).Walkable {
 				continue
 			}
 
 			for y2 := 0; y2 < int(grid.Height); y2++ {
 				for x2 := 0; x2 < int(grid.Width); x2++ {
-					if !grid.Data[y2][x2].Walkable {
+					if !grid.Tile(x2, y2).Walkable {
 						continue
 					}
 					solvePath(grid, x1, y1, x2, y2, paths)
