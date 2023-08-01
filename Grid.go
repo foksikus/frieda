@@ -136,3 +136,21 @@ const (
 	TILE_WATER  = 1 << 2
 	TILE_CLIFF  = 1 << 3
 )
+
+func pathToVectors(path []astar.Pather) []*Vector {
+	vectors := make([]*Vector, len(path))
+	for i, node := range path {
+		idk := node.(*Tile)
+		vectors[i] = vectorPool.Get(idk.x, idk.y)
+	}
+	return vectors
+}
+
+func Idk(grid *Grid, start, end *Vector) ([]*Vector, float64, bool) {
+	path, distance, found := astar.Path(grid.Tile(start.X, start.Y), grid.Tile(end.X, end.Y))
+	if !found {
+		return []*Vector{}, 0, false
+	}
+
+	return pathToVectors(path), distance, found
+}

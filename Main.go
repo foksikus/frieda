@@ -3,7 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
+	"time"
 )
+
+func measureExecutionTime(function func()) time.Duration {
+	startTime := time.Now()
+	function()
+	endTime := time.Now()
+	return endTime.Sub(startTime)
+}
 
 func main() {
 	filePath := *flag.String("file", "prt_fild02.fld2", "filepath to the .fld2 file")

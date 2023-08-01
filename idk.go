@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-
-	"github.com/beefsack/go-astar"
 )
 
 // Path represents a single path from one walkable cell to another.
@@ -26,14 +24,6 @@ func reverseArray(a []*Vector) {
 
 func getKey(x, y int) string {
 	return fmt.Sprintf("(%d,%d)", x, y)
-}
-
-func pathToVectors(path []*Tile) []*Vector {
-	vectors := make([]*Vector, len(path))
-	for i, node := range path {
-		vectors[i] = vectorPool.Get(node.x, node.y)
-	}
-	return vectors
 }
 
 func traversePathForward(path []*Vector, endX, endY int, paths PathsCache) {
@@ -74,15 +64,11 @@ func solvePath(grid *Grid, startX, startY, endX, endY int, paths PathsCache) {
 
 	// Check if the path has already been calculated and stored.
 	if _, ok := paths[startKey][goalKey]; !ok {
-		path, distance, found := astar.Path(grid.Tile(startX, startY), grid.Tile(endX, endY))
+		vecPath, _, found := Idk(grid, &Vector{startX, startY}, &Vector{endX, endY})
 		if !found {
-			fmt.Fprintf(os.Stderr, "No path found from (%d,%d) to (%d,%d) with distance %d\n", startX, startY, endX, endY, distance)
+			fmt.Printf("Path not found from (%d,%d) to (%d,%d)", startX, startY, endX, endY)
 			return
 		}
-
-		// path := AStar(grid, startX, startY, endX, endY)
-		vecPath := pathToVectors(([]Tile)(path))
-
 		paths[startKey][goalKey] = vecPath
 		traversePathForward(vecPath, endX, endY, paths)
 		traversePathBackward(vecPath, startX, startY, paths)
