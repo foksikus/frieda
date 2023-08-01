@@ -79,7 +79,6 @@ func solvePath(grid *Grid, startX, startY, endX, endY int, paths PathsCache) {
 }
 
 // vector pool
-var vectorPool *VectorPool
 
 // PrecomputePaths calculates and stores all paths in the PathsCache.
 func PrecomputePaths(grid *Grid) PathsCache {

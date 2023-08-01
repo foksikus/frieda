@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/beefsack/go-astar"
 )
@@ -28,9 +29,9 @@ type Grid struct {
 // returns a tile for x,y
 func (g *Grid) Tile(x, y int) *Tile {
 	if x < 0 || y < 0 || x >= int(g.Width) || y >= int(g.Height) {
-		return &g.Data[y*g.Width+x]
+		return nil
 	}
-	return nil
+	return &g.Data[y*g.Width+x]
 }
 
 func (t *Tile) PathNeighbors() []astar.Pather {
@@ -146,11 +147,41 @@ func pathToVectors(path []astar.Pather) []*Vector {
 	return vectors
 }
 
+// Caching variables and mutex
+var cacheMutex sync.Mutex
+var cache = make(map[string]struct {
+	path    []*Vector
+	cost    float64
+	success bool
+})
+
+func getVectorKey(start, end *Vector) string {
+	return fmt.Sprintf("(%d,%d)-(%d,%d)", start.X, start.Y, end.X, end.Y)
+}
+
 func Idk(grid *Grid, start, end *Vector) ([]*Vector, float64, bool) {
-	path, distance, found := astar.Path(grid.Tile(start.X, start.Y), grid.Tile(end.X, end.Y))
-	if !found {
-		return []*Vector{}, 0, false
+	input := getVectorKey(start, end)
+	cacheMutex.Lock()
+	if cachedResult, ok := cache[input]; ok {
+		cacheMutex.Unlock()
+		return cachedResult.path, cachedResult.cost, cachedResult.success
 	}
 
-	return pathToVectors(path), distance, found
+	cacheMutex.Unlock()
+	path, distance, found := astar.Path(grid.Tile(start.X, start.Y), grid.Tile(end.X, end.Y))
+
+	// Cache the result
+	cacheMutex.Lock()
+	cache[input] = struct {
+		path    []*Vector
+		cost    float64
+		success bool
+	}{
+		path:    pathToVectors(path),
+		cost:    distance,
+		success: found,
+	}
+	cacheMutex.Unlock()
+
+	return cache[input].path, distance, found
 }
